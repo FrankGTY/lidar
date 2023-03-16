@@ -13,9 +13,7 @@ class PVRCNN(Detector3DTemplate):
         if self.training:
             loss, tb_dict, disp_dict = self.get_training_loss()
 
-            ret_dict = {
-                'loss': loss
-            }
+            ret_dict = {"loss": loss}
             return ret_dict, tb_dict, disp_dict
         else:
             pred_dicts, recall_dicts = self.post_processing(batch_dict)
@@ -28,9 +26,9 @@ class PVRCNN(Detector3DTemplate):
         loss_rcnn, tb_dict = self.roi_head.get_loss(tb_dict)
 
         loss = loss_rpn + loss_point + loss_rcnn
-        
-        if hasattr(self.backbone_3d, 'get_loss'):
+
+        if hasattr(self.backbone_3d, "get_loss"):
             loss_backbone3d, tb_dict = self.backbone_3d.get_loss(tb_dict)
             loss += loss_backbone3d
-        
+
         return loss, tb_dict, disp_dict

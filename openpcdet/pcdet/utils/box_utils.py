@@ -1,11 +1,12 @@
+import copy
+
 import numpy as np
 import scipy
 import torch
-import copy
 from scipy.spatial import Delaunay
 
-from ..ops.roiaware_pool3d import roiaware_pool3d_utils
 from . import common_utils
+from ..ops.roiaware_pool3d import roiaware_pool3d_utils
 
 
 def in_hull(p, hull):
@@ -19,7 +20,7 @@ def in_hull(p, hull):
             hull = Delaunay(hull)
         flag = hull.find_simplex(p) >= 0
     except scipy.spatial.qhull.QhullError:
-        print('Warning: not a hull %s' % str(hull))
+        print("Warning: not a hull %s" % str(hull))
         flag = np.zeros(p.shape[0], dtype=np.bool)
 
     return flag
@@ -41,16 +42,30 @@ def boxes_to_corners_3d(boxes3d):
     """
     boxes3d, is_numpy = common_utils.check_numpy_to_torch(boxes3d)
 
-    template = boxes3d.new_tensor((
-        [1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1],
-        [1, 1, 1], [1, -1, 1], [-1, -1, 1], [-1, 1, 1],
-    )) / 2
+    template = (
+        boxes3d.new_tensor(
+            (
+                [1, 1, -1],
+                [1, -1, -1],
+                [-1, -1, -1],
+                [-1, 1, -1],
+                [1, 1, 1],
+                [1, -1, 1],
+                [-1, -1, 1],
+                [-1, 1, 1],
+            )
+        )
+        / 2
+    )
 
     corners3d = boxes3d[:, None, 3:6].repeat(1, 8, 1) * template[None, :, :]
-    corners3d = common_utils.rotate_points_along_z(corners3d.view(-1, 8, 3), boxes3d[:, 6]).view(-1, 8, 3)
+    corners3d = common_utils.rotate_points_along_z(corners3d.view(-1, 8, 3), boxes3d[:, 6]).view(
+        -1, 8, 3
+    )
     corners3d += boxes3d[:, None, 0:3]
 
     return corners3d.numpy() if is_numpy else corners3d
+
 
 def corners_rect_to_camera(corners):
     """
@@ -71,26 +86,30 @@ def corners_rect_to_camera(corners):
     width_group = [(0, 1), (2, 3), (4, 5), (6, 7)]
     length_group = [(0, 3), (1, 2), (4, 7), (5, 6)]
     vector_group = [(0, 3), (1, 2), (4, 7), (5, 6)]
-    height, width, length = 0., 0., 0.
+    height, width, length = 0.0, 0.0, 0.0
     vector = np.zeros(2, dtype=np.float32)
-    for index_h, index_w, index_l, index_v in zip(height_group, width_group, length_group, vector_group):
+    for index_h, index_w, index_l, index_v in zip(
+        height_group, width_group, length_group, vector_group
+    ):
         height += np.linalg.norm(corners[index_h[0], :] - corners[index_h[1], :])
         width += np.linalg.norm(corners[index_w[0], :] - corners[index_w[1], :])
         length += np.linalg.norm(corners[index_l[0], :] - corners[index_l[1], :])
         vector[0] += (corners[index_v[0], :] - corners[index_v[1], :])[0]
         vector[1] += (corners[index_v[0], :] - corners[index_v[1], :])[2]
 
-    height, width, length = height*1.0/4, width*1.0/4, length*1.0/4
+    height, width, length = height * 1.0 / 4, width * 1.0 / 4, length * 1.0 / 4
     rotation_y = -np.arctan2(vector[1], vector[0])
 
     center_point = corners.mean(axis=0)
-    center_point[1] += height/2
+    center_point[1] += height / 2
     camera_rect = np.concatenate([center_point, np.array([length, height, width, rotation_y])])
 
     return camera_rect
 
 
-def mask_boxes_outside_range_numpy(boxes, limit_range, min_num_corners=1, use_center_to_filter=True):
+def mask_boxes_outside_range_numpy(
+    boxes, limit_range, min_num_corners=1, use_center_to_filter=True
+):
     """
     Args:
         boxes: (N, 7) [x, y, z, dx, dy, dz, heading, ...], (x, y, z) is the box center
@@ -234,25 +253,40 @@ def boxes3d_to_corners3d_kitti_camera(boxes3d, bottom_center=True):
     """
     boxes_num = boxes3d.shape[0]
     l, h, w = boxes3d[:, 3], boxes3d[:, 4], boxes3d[:, 5]
-    x_corners = np.array([l / 2., l / 2., -l / 2., -l / 2., l / 2., l / 2., -l / 2., -l / 2], dtype=np.float32).T
-    z_corners = np.array([w / 2., -w / 2., -w / 2., w / 2., w / 2., -w / 2., -w / 2., w / 2.], dtype=np.float32).T
+    x_corners = np.array(
+        [l / 2.0, l / 2.0, -l / 2.0, -l / 2.0, l / 2.0, l / 2.0, -l / 2.0, -l / 2],
+        dtype=np.float32,
+    ).T
+    z_corners = np.array(
+        [w / 2.0, -w / 2.0, -w / 2.0, w / 2.0, w / 2.0, -w / 2.0, -w / 2.0, w / 2.0],
+        dtype=np.float32,
+    ).T
     if bottom_center:
         y_corners = np.zeros((boxes_num, 8), dtype=np.float32)
         y_corners[:, 4:8] = -h.reshape(boxes_num, 1).repeat(4, axis=1)  # (N, 8)
     else:
-        y_corners = np.array([h / 2., h / 2., h / 2., h / 2., -h / 2., -h / 2., -h / 2., -h / 2.], dtype=np.float32).T
+        y_corners = np.array(
+            [h / 2.0, h / 2.0, h / 2.0, h / 2.0, -h / 2.0, -h / 2.0, -h / 2.0, -h / 2.0],
+            dtype=np.float32,
+        ).T
 
     ry = boxes3d[:, 6]
     zeros, ones = np.zeros(ry.size, dtype=np.float32), np.ones(ry.size, dtype=np.float32)
-    rot_list = np.array([[np.cos(ry), zeros, -np.sin(ry)],
-                         [zeros, ones, zeros],
-                         [np.sin(ry), zeros, np.cos(ry)]])  # (3, 3, N)
+    rot_list = np.array(
+        [[np.cos(ry), zeros, -np.sin(ry)], [zeros, ones, zeros], [np.sin(ry), zeros, np.cos(ry)]]
+    )  # (3, 3, N)
     R_list = np.transpose(rot_list, (2, 0, 1))  # (N, 3, 3)
 
-    temp_corners = np.concatenate((x_corners.reshape(-1, 8, 1), y_corners.reshape(-1, 8, 1),
-                                   z_corners.reshape(-1, 8, 1)), axis=2)  # (N, 8, 3)
+    temp_corners = np.concatenate(
+        (x_corners.reshape(-1, 8, 1), y_corners.reshape(-1, 8, 1), z_corners.reshape(-1, 8, 1)),
+        axis=2,
+    )  # (N, 8, 3)
     rotated_corners = np.matmul(temp_corners, R_list)  # (N, 8, 3)
-    x_corners, y_corners, z_corners = rotated_corners[:, :, 0], rotated_corners[:, :, 1], rotated_corners[:, :, 2]
+    x_corners, y_corners, z_corners = (
+        rotated_corners[:, :, 0],
+        rotated_corners[:, :, 1],
+        rotated_corners[:, :, 2],
+    )
 
     x_loc, y_loc, z_loc = boxes3d[:, 0], boxes3d[:, 1], boxes3d[:, 2]
 
@@ -260,7 +294,9 @@ def boxes3d_to_corners3d_kitti_camera(boxes3d, bottom_center=True):
     y = y_loc.reshape(-1, 1) + y_corners.reshape(-1, 8)
     z = z_loc.reshape(-1, 1) + z_corners.reshape(-1, 8)
 
-    corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis=2)
+    corners = np.concatenate(
+        (x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis=2
+    )
 
     return corners.astype(np.float32)
 
@@ -307,7 +343,9 @@ def boxes_iou_normal(boxes_a, boxes_b):
     area_a = (boxes_a[:, 2] - boxes_a[:, 0]) * (boxes_a[:, 3] - boxes_a[:, 1])
     area_b = (boxes_b[:, 2] - boxes_b[:, 0]) * (boxes_b[:, 3] - boxes_b[:, 1])
     a_intersect_b = x_len * y_len
-    iou = a_intersect_b / torch.clamp_min(area_a[:, None] + area_b[None, :] - a_intersect_b, min=1e-6)
+    iou = a_intersect_b / torch.clamp_min(
+        area_a[:, None] + area_b[None, :] - a_intersect_b, min=1e-6
+    )
     return iou
 
 
@@ -320,8 +358,12 @@ def boxes3d_lidar_to_aligned_bev_boxes(boxes3d):
         aligned_bev_boxes: (N, 4) [x1, y1, x2, y2] in the above lidar coordinate
     """
     rot_angle = common_utils.limit_period(boxes3d[:, 6], offset=0.5, period=np.pi).abs()
-    choose_dims = torch.where(rot_angle[:, None] < np.pi / 4, boxes3d[:, [3, 4]], boxes3d[:, [4, 3]])
-    aligned_bev_boxes = torch.cat((boxes3d[:, 0:2] - choose_dims / 2, boxes3d[:, 0:2] + choose_dims / 2), dim=1)
+    choose_dims = torch.where(
+        rot_angle[:, None] < np.pi / 4, boxes3d[:, [3, 4]], boxes3d[:, [4, 3]]
+    )
+    aligned_bev_boxes = torch.cat(
+        (boxes3d[:, 0:2] - choose_dims / 2, boxes3d[:, 0:2] + choose_dims / 2), dim=1
+    )
     return aligned_bev_boxes
 
 

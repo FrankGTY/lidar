@@ -10,8 +10,7 @@ from .fastai_optim import OptimWrapper
 
 
 class LRSchedulerStep(object):
-    def __init__(self, fai_optimizer: OptimWrapper, total_step, lr_phases,
-                 mom_phases):
+    def __init__(self, fai_optimizer: OptimWrapper, total_step, lr_phases, mom_phases):
         # if not isinstance(fai_optimizer, OptimWrapper):
         #     raise TypeError('{} is not a fastai OptimWrapper'.format(
         #         type(fai_optimizer).__name__))
@@ -25,7 +24,9 @@ class LRSchedulerStep(object):
             if isinstance(lambda_func, str):
                 lambda_func = eval(lambda_func)
             if i < len(lr_phases) - 1:
-                self.lr_phases.append((int(start * total_step), int(lr_phases[i + 1][0] * total_step), lambda_func))
+                self.lr_phases.append(
+                    (int(start * total_step), int(lr_phases[i + 1][0] * total_step), lambda_func)
+                )
             else:
                 self.lr_phases.append((int(start * total_step), total_step, lambda_func))
         assert self.lr_phases[0][0] == 0
@@ -36,7 +37,9 @@ class LRSchedulerStep(object):
             if isinstance(lambda_func, str):
                 lambda_func = eval(lambda_func)
             if i < len(mom_phases) - 1:
-                self.mom_phases.append((int(start * total_step), int(mom_phases[i + 1][0] * total_step), lambda_func))
+                self.mom_phases.append(
+                    (int(start * total_step), int(mom_phases[i + 1][0] * total_step), lambda_func)
+                )
             else:
                 self.mom_phases.append((int(start * total_step), total_step, lambda_func))
         assert self.mom_phases[0][0] == 0
@@ -58,8 +61,7 @@ def annealing_cos(start, end, pct):
 
 
 class OneCycle(LRSchedulerStep):
-    def __init__(self, fai_optimizer, total_step, lr_max, moms, div_factor,
-                 pct_start):
+    def __init__(self, fai_optimizer, total_step, lr_max, moms, div_factor, pct_start):
         self.lr_max = lr_max
         self.moms = moms
         self.div_factor = div_factor
@@ -67,12 +69,14 @@ class OneCycle(LRSchedulerStep):
         a1 = int(total_step * self.pct_start)
         a2 = total_step - a1
         low_lr = self.lr_max / self.div_factor
-        lr_phases = ((0, partial(annealing_cos, low_lr, self.lr_max)),
-                     (self.pct_start,
-                      partial(annealing_cos, self.lr_max, low_lr / 1e4)))
-        mom_phases = ((0, partial(annealing_cos, *self.moms)),
-                      (self.pct_start, partial(annealing_cos,
-                                               *self.moms[::-1])))
+        lr_phases = (
+            (0, partial(annealing_cos, low_lr, self.lr_max)),
+            (self.pct_start, partial(annealing_cos, self.lr_max, low_lr / 1e4)),
+        )
+        mom_phases = (
+            (0, partial(annealing_cos, *self.moms)),
+            (self.pct_start, partial(annealing_cos, *self.moms[::-1])),
+        )
         fai_optimizer.lr, fai_optimizer.mom = low_lr, self.moms[0]
         super().__init__(fai_optimizer, total_step, lr_phases, mom_phases)
 
@@ -84,9 +88,11 @@ class CosineWarmupLR(lr_sched._LRScheduler):
         super(CosineWarmupLR, self).__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        return [self.eta_min + (base_lr - self.eta_min) *
-                (1 - math.cos(math.pi * self.last_epoch / self.T_max)) / 2
-                for base_lr in self.base_lrs]
+        return [
+            self.eta_min
+            + (base_lr - self.eta_min) * (1 - math.cos(math.pi * self.last_epoch / self.T_max)) / 2
+            for base_lr in self.base_lrs
+        ]
 
 
 class FakeOptim:

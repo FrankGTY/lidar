@@ -1,15 +1,17 @@
 from collections import OrderedDict
 from pathlib import Path
-from torch import hub
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+from torch import hub
 
 
 class SegTemplate(nn.Module):
-    def __init__(self, constructor, feat_extract_layer, num_classes, pretrained_path=None, aux_loss=None):
+    def __init__(
+        self, constructor, feat_extract_layer, num_classes, pretrained_path=None, aux_loss=None
+    ):
         """
         Initializes depth distribution network.
         Args:
@@ -34,9 +36,8 @@ class SegTemplate(nn.Module):
         self.model = self.get_model(constructor=constructor)
         self.feat_extract_layer = feat_extract_layer
 
-        return_layers = {_layer:_layer for _layer in feat_extract_layer}
+        return_layers = {_layer: _layer for _layer in feat_extract_layer}
         self.model.backbone.return_layers.update(return_layers)
-
 
     def get_model(self, constructor):
         """
@@ -47,10 +48,12 @@ class SegTemplate(nn.Module):
             model: nn.Module, Model
         """
         # Get model
-        model = constructor(pretrained=False,
-                            pretrained_backbone=False,
-                            num_classes=self.num_classes,
-                            aux_loss=self.aux_loss)
+        model = constructor(
+            pretrained=False,
+            pretrained_backbone=False,
+            num_classes=self.num_classes,
+            aux_loss=self.aux_loss,
+        )
         # Update weights
         if self.pretrained_path is not None:
             model_dict = model.state_dict()
@@ -61,12 +64,12 @@ class SegTemplate(nn.Module):
                 checkpoint = checkpoint_path.name
                 save_dir = checkpoint_path.parent
                 save_dir.mkdir(parents=True, exist_ok=True)
-                url = f'https://download.pytorch.org/models/{checkpoint}'
+                url = f"https://download.pytorch.org/models/{checkpoint}"
                 hub.load_state_dict_from_url(url, save_dir)
 
             # Get pretrained state dict
             pretrained_dict = torch.load(self.pretrained_path)
-            #pretrained_dict = self.filter_pretrained_dict(model_dict=model_dict, pretrained_dict=pretrained_dict)
+            # pretrained_dict = self.filter_pretrained_dict(model_dict=model_dict, pretrained_dict=pretrained_dict)
 
             # Update current model state dict
             model_dict.update(pretrained_dict)
@@ -84,9 +87,13 @@ class SegTemplate(nn.Module):
             pretrained_dict: dict, Pretrained model state dictionary with removed weights
         """
         # Removes aux classifier weights if not used
-        if "aux_classifier.0.weight" in pretrained_dict and "aux_classifier.0.weight" not in model_dict:
-            pretrained_dict = {key: value for key, value in pretrained_dict.items()
-                               if "aux_classifier" not in key}
+        if (
+            "aux_classifier.0.weight" in pretrained_dict
+            and "aux_classifier.0.weight" not in model_dict
+        ):
+            pretrained_dict = {
+                key: value for key, value in pretrained_dict.items() if "aux_classifier" not in key
+            }
 
         # Removes final conv layer from weights if number of classes are different
         model_num_classes = model_dict["classifier.4.weight"].shape[0]
@@ -111,7 +118,9 @@ class SegTemplate(nn.Module):
 
         # Preprocess images
         if self.pretrained:
-            images = (images - self.norm_mean[None, :, None, None].type_as(images)) / self.norm_std[None, :, None, None].type_as(images)
+            images = (
+                images - self.norm_mean[None, :, None, None].type_as(images)
+            ) / self.norm_std[None, :, None, None].type_as(images)
         x = images.cuda()
 
         # Extract features
@@ -121,13 +130,13 @@ class SegTemplate(nn.Module):
             result[_layer] = features[_layer]
         return result
 
-        if 'features' in features.keys():
-            feat_shape = features['features'].shape[-2:]
+        if "features" in features.keys():
+            feat_shape = features["features"].shape[-2:]
         else:
-            feat_shape = features['layer1'].shape[-2:]
+            feat_shape = features["layer1"].shape[-2:]
 
         # Prediction classification logits
-        x = features["out"] # comment the classifier to reduce memory
+        x = features["out"]  # comment the classifier to reduce memory
         # x = self.model.classifier(x)
         # x = F.interpolate(x, size=feat_shape, mode='bilinear', align_corners=False)
         result["logits"] = x
@@ -136,14 +145,13 @@ class SegTemplate(nn.Module):
         if self.model.aux_classifier is not None:
             x = features["aux"]
             x = self.model.aux_classifier(x)
-            x = F.interpolate(x, size=feat_shape, mode='bilinear', align_corners=False)
+            x = F.interpolate(x, size=feat_shape, mode="bilinear", align_corners=False)
             result["aux"] = x
 
         return result
 
 
 class SemDeepLabV3(SegTemplate):
-
     def __init__(self, backbone_name, **kwargs):
         """
         Initializes SemDeepLabV3 model

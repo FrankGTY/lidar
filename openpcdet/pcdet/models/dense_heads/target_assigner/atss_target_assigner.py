@@ -8,6 +8,7 @@ class ATSSTargetAssigner(object):
     """
     Reference: https://arxiv.org/abs/1912.02424
     """
+
     def __init__(self, topk, box_coder, match_height=False):
         self.topk = topk
         self.box_coder = box_coder
@@ -32,7 +33,9 @@ class ATSSTargetAssigner(object):
             gt_classes = gt_boxes_with_classes[:, :, -1]
             gt_boxes = gt_boxes_with_classes[:, :, :-1]
             if use_multihead:
-                anchors = anchors.permute(3, 4, 0, 1, 2, 5).contiguous().view(-1, anchors.shape[-1])
+                anchors = (
+                    anchors.permute(3, 4, 0, 1, 2, 5).contiguous().view(-1, anchors.shape[-1])
+                )
             else:
                 anchors = anchors.view(-1, anchors.shape[-1])
             cls_labels, reg_targets, reg_weights = [], [], []
@@ -41,9 +44,9 @@ class ATSSTargetAssigner(object):
                 cnt = cur_gt.__len__() - 1
                 while cnt > 0 and cur_gt[cnt].sum() == 0:
                     cnt -= 1
-                cur_gt = cur_gt[:cnt + 1]
+                cur_gt = cur_gt[: cnt + 1]
 
-                cur_gt_classes = gt_classes[k][:cnt + 1]
+                cur_gt_classes = gt_classes[k][: cnt + 1]
                 cur_cls_labels, cur_reg_targets, cur_reg_weights = self.assign_targets_single(
                     anchors, cur_gt, cur_gt_classes
                 )
@@ -60,15 +63,15 @@ class ATSSTargetAssigner(object):
 
         if single_set_of_anchor:
             ret_dict = {
-                'box_cls_labels': cls_labels_list[0],
-                'box_reg_targets': reg_targets_list[0],
-                'reg_weights': reg_weights_list[0]
+                "box_cls_labels": cls_labels_list[0],
+                "box_reg_targets": reg_targets_list[0],
+                "reg_weights": reg_weights_list[0],
             }
         else:
             ret_dict = {
-                'box_cls_labels': torch.cat(cls_labels_list, dim=1),
-                'box_reg_targets': torch.cat(reg_targets_list, dim=1),
-                'reg_weights': torch.cat(reg_weights_list, dim=1)
+                "box_cls_labels": torch.cat(cls_labels_list, dim=1),
+                "box_reg_targets": torch.cat(reg_targets_list, dim=1),
+                "reg_weights": torch.cat(reg_weights_list, dim=1),
             }
         return ret_dict
 
@@ -106,8 +109,12 @@ class ATSSTargetAssigner(object):
             xyz_local[:, None, :], -gt_boxes_of_each_anchor[:, 6]
         ).squeeze(dim=1)
         xy_local = xyz_local[:, 0:2]
-        lw = gt_boxes_of_each_anchor[:, 3:5][:, [1, 0]]  # bugfixed: w ==> y, l ==> x in local coords
-        is_in_gt = ((xy_local <= lw / 2) & (xy_local >= -lw / 2)).all(dim=-1).view(-1, num_gt)  # (K, M)
+        lw = gt_boxes_of_each_anchor[:, 3:5][
+            :, [1, 0]
+        ]  # bugfixed: w ==> y, l ==> x in local coords
+        is_in_gt = (
+            ((xy_local <= lw / 2) & (xy_local >= -lw / 2)).all(dim=-1).view(-1, num_gt)
+        )  # (K, M)
         is_pos = is_pos & is_in_gt  # (K, M)
 
         for ng in range(num_gt):
@@ -135,7 +142,9 @@ class ATSSTargetAssigner(object):
         reg_targets = matched_gts.new_zeros((num_anchor, self.box_coder.code_size))
         reg_weights = matched_gts.new_zeros(num_anchor)
         if pos_mask.sum() > 0:
-            reg_targets[pos_mask > 0] = self.box_coder.encode_torch(matched_gts[pos_mask > 0], anchors[pos_mask > 0])
+            reg_targets[pos_mask > 0] = self.box_coder.encode_torch(
+                matched_gts[pos_mask > 0], anchors[pos_mask > 0]
+            )
             reg_weights[pos_mask] = 1.0
 
         return cls_labels, reg_targets, reg_weights

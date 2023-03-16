@@ -28,7 +28,7 @@ def distance_filter(boxes, level):
     elif level == 2:  # 50m-inf
         flag = dist >= 50
     else:
-        assert False, 'level < 3 for distance metric, found level %s' % (str(level))
+        assert False, "level < 3 for distance metric, found level %s" % (str(level))
 
     ignore[flag] = False
     return ignore
@@ -47,7 +47,7 @@ def overall_distance_filter(boxes, level):
     elif level == 3:  # 50m-inf
         flag = dist >= 50
     else:
-        assert False, 'level < 4 for overall & distance metric, found level %s' % (str(level))
+        assert False, "level < 4 for overall & distance metric, found level %s" % (str(level))
 
     ignore[flag] = False
     return ignore
